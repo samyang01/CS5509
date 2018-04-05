@@ -1,0 +1,68 @@
+import requests
+import pandas as pd
+import tensorflow as tf
+
+# The dataset used for this logistic regression model was taken from the UCI datasets website.  The dataset was
+# used to classify abalone by age according to 8 different features"
+
+# Scrape the data from the webpage using requests and save onto hard drive
+res = requests.get('http://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data')
+file=open('abalone.txt', 'wb')
+for chunk in res.iter_content(100000):
+    file.write(chunk)
+
+# Since the data contains features that consists of letters, we will use a pandas DF instead of array to read in
+data = pd.read_csv('abalone.txt', header=None)
+n_samples=len(data)
+
+# One of the features is the sex of the abalone denoted by M,F, and I (infant), we need to encode those features with
+# digits so that the model can use the information
+data=data.replace(to_replace=['M','F','I'], value=[0,1,2])
+
+# We can separate the features from the labels in the dataset in order to feed into the model
+features=data.iloc[:,0:8]
+labels=data.iloc[:,8]
+
+# We have to one_hot_encode the labels to match the shape that the model expects for Y, by using get.dummies
+labels=pd.get_dummies(labels)
+
+# Define placeholders for our features and labels
+X = tf.placeholder(tf.float32, [None, 8], name="Features")
+Y = tf.placeholder(tf.float32, [None, 28], name="age") # ages of the abalone are 1-29, there were no abalone of age 28
+
+# Define our variables, here our weights are going to be an array of shape [8,28] since we have 8 features and 28 possible
+# labels
+W = tf.Variable(tf.zeros([8,28]))
+b = tf.Variable(tf.zeros([28]))
+
+# Define our model.  We begin with a matrix multiplication of our features with the variable matrix + bias to give us a
+# raw prediction that we pass to the softmax function which is a logistic regression function that is able to handle
+# multiple classes.  Next, we define a cost function that compares the actual value of Y  with the predicted value.
+# Then we run gradient descent on the cost function
+
+pred = tf.nn.softmax(tf.matmul(X, W) + b)
+
+cost = tf.reduce_mean(-tf.reduce_sum(Y*tf.log(pred), reduction_indices=1))
+
+optimizer = tf.train.GradientDescentOptimizer(learning_rate=.01).minimize(cost)
+
+# Create a TF session and initialize variables.  Then start training the model and output the loss.  We see that the
+# the loss is decreasing with each Epoch of the model, showing us that gradient descent is working.
+
+with tf.Session() as sess:
+    sess.run(tf.global_variables_initializer())
+
+    writer = tf.summary.FileWriter('./graphs/logistic_reg', sess.graph)
+
+    for i in range(100):
+        total_loss = 0
+        _, l = sess.run([optimizer, cost], feed_dict={X: features, Y: labels})
+        total_loss += l
+        print('Epoch {0}: {1}'.format(i, total_loss / n_samples))
+
+    writer.close()
+
+# Running the model with different values for the number of epochs and different learning_rate.
+# The loss continues to decrease as the the number of epochs are increased
+# The loss decreases as the learning rate is increased from 0.01 to 1, but then starts to increase again when the
+# learning rate is increased above 3, and does not converge when it is increased to 10
